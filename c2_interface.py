@@ -634,34 +634,178 @@ def program_hex_file(filename, verify=True):
 # C2Debugger - SFR Debug Helper Class
 # =============================================================================
 
+# Full C8051F34x SFR definitions with categories
+C8051F34X_SFRS = {
+    # CPU Core Registers
+    0x81: {"name": "SP", "category": "cpu"},
+    0x82: {"name": "DPL", "category": "cpu"},
+    0x83: {"name": "DPH", "category": "cpu"},
+    0xD0: {"name": "PSW", "category": "cpu"},
+    0xE0: {"name": "ACC", "category": "cpu"},
+    0xF0: {"name": "B", "category": "cpu"},
+
+    # Interrupt Registers
+    0xA8: {"name": "IE", "category": "interrupt"},
+    0xB8: {"name": "IP", "category": "interrupt"},
+    0xE4: {"name": "IT01CF", "category": "interrupt"},
+    0xE6: {"name": "EIE1", "category": "interrupt"},
+    0xE7: {"name": "EIE2", "category": "interrupt"},
+    0xF6: {"name": "EIP1", "category": "interrupt"},
+    0xF7: {"name": "EIP2", "category": "interrupt"},
+
+    # Port I/O Registers
+    0x80: {"name": "P0", "category": "port"},
+    0x90: {"name": "P1", "category": "port"},
+    0xA0: {"name": "P2", "category": "port"},
+    0xB0: {"name": "P3", "category": "port"},
+    0xC7: {"name": "P4", "category": "port"},
+    0xF1: {"name": "P0MDIN", "category": "port"},
+    0xF2: {"name": "P1MDIN", "category": "port"},
+    0xF3: {"name": "P2MDIN", "category": "port"},
+    0xF4: {"name": "P3MDIN", "category": "port"},
+    0xF5: {"name": "P4MDIN", "category": "port"},
+    0xA4: {"name": "P0MDOUT", "category": "port"},
+    0xA5: {"name": "P1MDOUT", "category": "port"},
+    0xA6: {"name": "P2MDOUT", "category": "port"},
+    0xA7: {"name": "P3MDOUT", "category": "port"},
+    0xAE: {"name": "P4MDOUT", "category": "port"},
+    0xD4: {"name": "P0SKIP", "category": "port"},
+    0xD5: {"name": "P1SKIP", "category": "port"},
+    0xD6: {"name": "P2SKIP", "category": "port"},
+    0xDF: {"name": "P3SKIP", "category": "port"},
+
+    # Crossbar Registers
+    0xE1: {"name": "XBR0", "category": "crossbar"},
+    0xE2: {"name": "XBR1", "category": "crossbar"},
+    0xE3: {"name": "XBR2", "category": "crossbar"},
+
+    # Timer Registers
+    0x88: {"name": "TCON", "category": "timer"},
+    0x89: {"name": "TMOD", "category": "timer"},
+    0x8A: {"name": "TL0", "category": "timer"},
+    0x8B: {"name": "TL1", "category": "timer"},
+    0x8C: {"name": "TH0", "category": "timer"},
+    0x8D: {"name": "TH1", "category": "timer"},
+    0x8E: {"name": "CKCON", "category": "timer"},
+    0xC8: {"name": "TMR2CN", "category": "timer"},
+    0xCA: {"name": "TMR2RLL", "category": "timer"},
+    0xCB: {"name": "TMR2RLH", "category": "timer"},
+    0xCC: {"name": "TMR2L", "category": "timer"},
+    0xCD: {"name": "TMR2H", "category": "timer"},
+    0x91: {"name": "TMR3CN", "category": "timer"},
+    0x92: {"name": "TMR3RLL", "category": "timer"},
+    0x93: {"name": "TMR3RLH", "category": "timer"},
+    0x94: {"name": "TMR3L", "category": "timer"},
+    0x95: {"name": "TMR3H", "category": "timer"},
+
+    # PCA Registers
+    0xD8: {"name": "PCA0CN", "category": "pca"},
+    0xD9: {"name": "PCA0MD", "category": "pca"},
+    0xDA: {"name": "PCA0CPM0", "category": "pca"},
+    0xDB: {"name": "PCA0CPM1", "category": "pca"},
+    0xDC: {"name": "PCA0CPM2", "category": "pca"},
+    0xDD: {"name": "PCA0CPM3", "category": "pca"},
+    0xDE: {"name": "PCA0CPM4", "category": "pca"},
+    0xF9: {"name": "PCA0L", "category": "pca"},
+    0xFA: {"name": "PCA0H", "category": "pca"},
+    0xFB: {"name": "PCA0CPL0", "category": "pca"},
+    0xFC: {"name": "PCA0CPH0", "category": "pca"},
+    0xE9: {"name": "PCA0CPL1", "category": "pca"},
+    0xEA: {"name": "PCA0CPH1", "category": "pca"},
+    0xEB: {"name": "PCA0CPL2", "category": "pca"},
+    0xEC: {"name": "PCA0CPH2", "category": "pca"},
+    0xED: {"name": "PCA0CPL3", "category": "pca"},
+    0xEE: {"name": "PCA0CPH3", "category": "pca"},
+    0xFD: {"name": "PCA0CPL4", "category": "pca"},
+    0xFE: {"name": "PCA0CPH4", "category": "pca"},
+
+    # UART Registers
+    0x98: {"name": "SCON0", "category": "uart"},
+    0x99: {"name": "SBUF0", "category": "uart"},
+    0xD2: {"name": "SCON1", "category": "uart"},
+    0xD3: {"name": "SBUF1", "category": "uart"},
+    0xE5: {"name": "SMOD1", "category": "uart"},
+    0xAC: {"name": "SBCON1", "category": "uart"},
+    0xB4: {"name": "SBRLL1", "category": "uart"},
+    0xB5: {"name": "SBRLH1", "category": "uart"},
+
+    # SMBus Registers
+    0xC0: {"name": "SMB0CN", "category": "smbus"},
+    0xC1: {"name": "SMB0CF", "category": "smbus"},
+    0xC2: {"name": "SMB0DAT", "category": "smbus"},
+
+    # SPI Registers
+    0xA1: {"name": "SPI0CFG", "category": "spi"},
+    0xA2: {"name": "SPI0CKR", "category": "spi"},
+    0xA3: {"name": "SPI0DAT", "category": "spi"},
+    0xF8: {"name": "SPI0CN", "category": "spi"},
+
+    # ADC Registers
+    0xBA: {"name": "AMX0N", "category": "adc"},
+    0xBB: {"name": "AMX0P", "category": "adc"},
+    0xBC: {"name": "ADC0CF", "category": "adc"},
+    0xBD: {"name": "ADC0L", "category": "adc"},
+    0xBE: {"name": "ADC0H", "category": "adc"},
+    0xC3: {"name": "ADC0GTL", "category": "adc"},
+    0xC4: {"name": "ADC0GTH", "category": "adc"},
+    0xC5: {"name": "ADC0LTL", "category": "adc"},
+    0xC6: {"name": "ADC0LTH", "category": "adc"},
+    0xE8: {"name": "ADC0CN", "category": "adc"},
+
+    # Comparator Registers
+    0x9A: {"name": "CPT1CN", "category": "comparator"},
+    0x9B: {"name": "CPT0CN", "category": "comparator"},
+    0x9C: {"name": "CPT1MD", "category": "comparator"},
+    0x9D: {"name": "CPT0MD", "category": "comparator"},
+    0x9E: {"name": "CPT1MX", "category": "comparator"},
+    0x9F: {"name": "CPT0MX", "category": "comparator"},
+
+    # Voltage Reference and Regulator Registers
+    0xD1: {"name": "REF0CN", "category": "voltage_ref"},
+    0xC9: {"name": "REG0CN", "category": "voltage_ref"},
+
+    # Oscillator and Clock Registers
+    0xB1: {"name": "OSCXCN", "category": "oscillator"},
+    0xB2: {"name": "OSCICN", "category": "oscillator"},
+    0xB3: {"name": "OSCICL", "category": "oscillator"},
+    0x86: {"name": "OSCLCN", "category": "oscillator"},
+    0xA9: {"name": "CLKSEL", "category": "oscillator"},
+    0xB9: {"name": "CLKMUL", "category": "oscillator"},
+
+    # Flash Memory Registers
+    0x8F: {"name": "PSCTL", "category": "flash"},
+    0xB6: {"name": "FLSCL", "category": "flash"},
+    0xB7: {"name": "FLKEY", "category": "flash"},
+
+    # External Memory Interface Registers
+    0x84: {"name": "EMI0TC", "category": "emif"},
+    0x85: {"name": "EMI0CF", "category": "emif"},
+    0xAA: {"name": "EMI0CN", "category": "emif"},
+
+    # USB Registers
+    0x96: {"name": "USB0ADR", "category": "usb"},
+    0x97: {"name": "USB0DAT", "category": "usb"},
+    0xD7: {"name": "USB0XCN", "category": "usb"},
+
+    # System Registers
+    0x87: {"name": "PCON", "category": "system"},
+    0xAF: {"name": "PFE0CN", "category": "system"},
+    0xEF: {"name": "RSTSRC", "category": "system"},
+    0xFF: {"name": "VDM0CN", "category": "system"},
+}
+
+CATEGORY_ORDER = [
+    "system", "cpu", "oscillator", "flash", "interrupt", "port", "crossbar",
+    "emif", "timer", "pca", "uart", "smbus", "spi", "usb", "adc", 
+    "comparator", "voltage_ref",
+]
+
+
 class C2Debugger:
     """Debug helper for reading/writing SFRs."""
     
-    SFR_MAP = {
-        0x80: "P0", 0x81: "SP", 0x82: "DPL", 0x83: "DPH",
-        0x87: "PCON", 0x88: "TCON", 0x89: "TMOD",
-        0x8A: "TL0", 0x8B: "TL1", 0x8C: "TH0", 0x8D: "TH1",
-        0x8E: "CKCON", 0x8F: "PSCTL",
-        0x90: "P1", 0x91: "TMR3CN", 0x92: "TMR3RLL", 0x93: "TMR3RLH",
-        0x94: "TMR3L", 0x95: "TMR3H",
-        0x98: "SCON0", 0x99: "SBUF0",
-        0xA0: "P2", 0xA4: "P0MDOUT", 0xA5: "P1MDOUT", 
-        0xA6: "P2MDOUT", 0xA7: "P3MDOUT",
-        0xA8: "IE", 0xA9: "CLKSEL", 0xAD: "FPDAT",
-        0xB0: "P3", 0xB1: "OSCXCN", 0xB2: "OSCICN", 0xB3: "OSCICL",
-        0xB5: "FLKEY", 0xB6: "FLSCL", 0xB8: "IP",
-        0xC0: "SMB0CN", 0xC8: "TMR2CN", 0xC9: "REG0CN",
-        0xD0: "PSW", 0xD4: "P0SKIP", 0xD5: "P1SKIP", 0xD6: "P2SKIP",
-        0xD8: "PCA0CN", 0xD9: "PCA0MD",
-        0xE0: "ACC", 0xE1: "XBR0", 0xE2: "XBR1", 0xE3: "XBR2",
-        0xE6: "EIE1", 0xE7: "EIE2", 0xE8: "ADC0CN", 0xEF: "RSTSRC",
-        0xF0: "B", 0xF1: "P0MDIN", 0xF2: "P1MDIN", 
-        0xF3: "P2MDIN", 0xF4: "P3MDIN",
-        0xF5: "EIP1", 0xF6: "EIP2", 0xF8: "SPI0CN", 0xFF: "VDM0CN",
-    }
-    
     # Reverse lookup: name -> address
-    SFR_BY_NAME = {v: k for k, v in SFR_MAP.items()}
+    SFR_BY_NAME = {info["name"]: addr for addr, info in C8051F34X_SFRS.items()}
     
     def __init__(self, prog_or_c2):
         if isinstance(prog_or_c2, C2Programmer):
@@ -686,7 +830,9 @@ class C2Debugger:
     
     def name(self, addr):
         addr = self._resolve_addr(addr)
-        return self.SFR_MAP.get(addr, f"0x{addr:02X}")
+        if addr in C8051F34X_SFRS:
+            return C8051F34X_SFRS[addr]["name"]
+        return f"0x{addr:02X}"
     
     def read(self, addr):
         addr = self._resolve_addr(addr)
@@ -700,15 +846,18 @@ class C2Debugger:
     
     def set_bits(self, addr, bits):
         addr = self._resolve_addr(addr)
-        self.write(addr, self.read(addr) | bits)
+        val = self.read(addr)
+        self.write(addr, val | bits)
     
     def clear_bits(self, addr, bits):
         addr = self._resolve_addr(addr)
-        self.write(addr, self.read(addr) & ~bits)
+        val = self.read(addr)
+        self.write(addr, val & (~bits & 0xFF))
     
     def toggle_bits(self, addr, bits):
         addr = self._resolve_addr(addr)
-        self.write(addr, self.read(addr) ^ bits)
+        val = self.read(addr)
+        self.write(addr, val ^ bits)
     
     def dump(self, addrs, title=None):
         if title:
@@ -723,39 +872,33 @@ class C2Debugger:
             except Exception as e:
                 print(f"0x{addr:02X}  {self.name(addr):10s} ERROR: {e}")
     
-    def dump_ports(self):
-        self.dump([0x80, 0xA4, 0xF1, 0xD4, 0x90, 0xA5, 0xF2, 0xD5,
-                   0xA0, 0xA6, 0xF3, 0xD6, 0xB0, 0xA7, 0xF4], "Port Configuration")
-    
-    def dump_crossbar(self):
-        self.dump([0xE1, 0xE2, 0xE3], "Crossbar Configuration")
-    
-    def dump_clocks(self):
-        self.dump([0xB1, 0xB2, 0xB3, 0xA9], "Clock Configuration")
-    
-    def dump_interrupts(self):
-        self.dump([0xA8, 0xB8, 0xE6, 0xE7, 0xF5, 0xF6], "Interrupt Configuration")
-    
-    def dump_timers(self):
-        self.dump([0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D,
-                   0xC8, 0x91, 0x92, 0x93, 0x94, 0x95], "Timer Configuration")
-    
-    def dump_uart(self):
-        self.dump([0x98, 0x99], "UART Configuration")
-    
-    def dump_system(self):
-        self.dump([0x81, 0x82, 0x83, 0xD0, 0xE0, 0xF0, 0xEF, 0xFF], "System Registers")
-    
-    def dump_all(self):
-        self.dump_system()
-        print()
-        self.dump_ports()
-        print()
-        self.dump_crossbar()
-        print()
-        self.dump_clocks()
-        print()
-        self.dump_interrupts()
+    def dump_all(self, categories=None):
+        """
+        Dump SFRs by category.
+        
+        Args:
+            categories: List of category names to dump, or None for all.
+        """
+        if categories is None:
+            categories = CATEGORY_ORDER
+        
+        first = True
+        for cat in CATEGORY_ORDER:
+            if cat not in categories:
+                continue
+            
+            # Get all SFRs in this category, sorted by address
+            addrs = sorted([addr for addr, info in C8051F34X_SFRS.items() 
+                           if info["category"] == cat])
+            
+            if not addrs:
+                continue
+            
+            if not first:
+                print()
+            first = False
+            
+            self.dump(addrs, cat.upper())
     
     def watch(self, addr, count=10, delay_ms=500):
         addr = self._resolve_addr(addr)
