@@ -28,6 +28,7 @@ class FlashLockedError(Exception):
 
     pass
 
+READ_ONLY = True
 
 # RP2040 GPIO registers
 GPIO_OUT_SET = const(0xD0000014)
@@ -467,12 +468,13 @@ class C2Programmer:
         return bytes(data)
 
     def erase_device(self):
-        raise RuntimeError("Flash erase disbled in read only build")
+        if READ_ONLY:
+            raise RuntimeError("Flash erase disbled in read only build")
         """
         Perform full device erase.
         WARNING: This erases ALL flash memory!
         """
-"""        if not self.initialized:
+        if not self.initialized:
             raise RuntimeError("Call reset_and_init() first")
 
         self.c2.address_write(self.fpdat_addr)
@@ -488,14 +490,14 @@ class C2Programmer:
         print("Erasing... ", end="")
         time.sleep_ms(3000)
         print("done!")
-"""        
+       
 
     def write_flash_block(self, address, data):
-        raise RuntimeError("Flash write disabled in read only build")
+        if READ_ONLY:
+            raise RuntimeError("Flash write disabled in read only build")
         """
         Write a block of data to flash.
         """
-"""
         if not self.initialized:
             raise RuntimeError("Call reset_and_init() first")
 
@@ -528,7 +530,6 @@ class C2Programmer:
 
         if status != PI_OK:
             raise RuntimeError(f"Block Write failed: 0x{status:02X}")
-"""
 
 # =============================================================================
 # Intel HEX file parser (memory-efficient streaming)
@@ -536,9 +537,10 @@ class C2Programmer:
 
 
 def program_hex_file(filename, verify=True):
-    raise RuntimeError("Programming disabled in read only build")
+    if READ_ONLY:
+        raise RuntimeError("Programming disabled in read only build")
+    
     """Erase device and program it with contents of Intel HEX file."""
-"""
     print(f"\n=== Initializing programmer ===")
     prog = C2Programmer()
     prog.reset_and_init()
@@ -655,7 +657,6 @@ def program_hex_file(filename, verify=True):
 
     print("\n=== Programming successful! ===")
     return True
-"""
 
 # =============================================================================
 # C2Debugger - SFR Debug Helper Class
