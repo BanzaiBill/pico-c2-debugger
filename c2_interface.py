@@ -1,6 +1,6 @@
 """
 C2 Interface for RP2040 (MicroPython)
-Implements Silicon Labs C2 programming interface for C8051F340
+Implements Silicon Labs C2 programming interface for C8051F340 and SI1000
 
 Based on AN127: Flash Programming via the C2 Interface
 
@@ -63,6 +63,13 @@ C8051F340_DEVID = const(0x0F)
 C8051F340_FPDAT = const(0xAD)
 C8051F340_PAGE_SIZE = const(512)
 C8051F340_FLASH_SIZE = const(64 * 1024)
+
+# SI1000 specific
+SI1000_DEVID = const(0x16)
+SI1000_FPDAT = const(0x00)
+SI1000_PAGE_SIZE = const(512)
+SI1000_FLASH_SIZE = const(64 * 1024)
+
 
 
 # =============================================================================
@@ -460,11 +467,12 @@ class C2Programmer:
         return bytes(data)
 
     def erase_device(self):
+        raise RuntimeError("Flash erase disbled in read only build")
         """
         Perform full device erase.
         WARNING: This erases ALL flash memory!
         """
-        if not self.initialized:
+"""        if not self.initialized:
             raise RuntimeError("Call reset_and_init() first")
 
         self.c2.address_write(self.fpdat_addr)
@@ -480,11 +488,14 @@ class C2Programmer:
         print("Erasing... ", end="")
         time.sleep_ms(3000)
         print("done!")
+"""        
 
     def write_flash_block(self, address, data):
+        raise RuntimeError("Flash write disabled in read only build")
         """
         Write a block of data to flash.
         """
+"""
         if not self.initialized:
             raise RuntimeError("Call reset_and_init() first")
 
@@ -517,7 +528,7 @@ class C2Programmer:
 
         if status != PI_OK:
             raise RuntimeError(f"Block Write failed: 0x{status:02X}")
-
+"""
 
 # =============================================================================
 # Intel HEX file parser (memory-efficient streaming)
@@ -525,8 +536,9 @@ class C2Programmer:
 
 
 def program_hex_file(filename, verify=True):
+    raise RuntimeError("Programming disabled in read only build")
     """Erase device and program it with contents of Intel HEX file."""
-
+"""
     print(f"\n=== Initializing programmer ===")
     prog = C2Programmer()
     prog.reset_and_init()
@@ -643,7 +655,7 @@ def program_hex_file(filename, verify=True):
 
     print("\n=== Programming successful! ===")
     return True
-
+"""
 
 # =============================================================================
 # C2Debugger - SFR Debug Helper Class
@@ -987,6 +999,8 @@ def quick_test():
 
     if device_id == C8051F340_DEVID:
         print("SUCCESS: C8051F340 detected!")
+    else if device_id == SI1000_DEVID:
+        print("SUCCESS: SI1000 detected!")
 
     try:
         info = prog.get_device_info()
