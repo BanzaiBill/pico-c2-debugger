@@ -59,6 +59,23 @@ PI_ERR_INVALID_CMD = const(0x01)
 PI_ERR_CMD_FAILED = const(0x02)
 PI_ERR_FLASH_ERROR = const(0x03)  # Often indicates locked flash
 
+# Device Descriptors
+C8051F340 = {
+    "name": "C8051F340",
+    "device_id": 0x0F,
+    "fpdat": 0xAD,
+    "page_size": 512,
+    "flash_size": 64 * 1024,
+}
+
+SI1000 = {
+    "name": "Si1000",
+    "device_id": 0x16,       # fill from datasheet/ec2
+    "fpdat": 0xB4,
+    "page_size": 1024,       # fill next
+    "flash_size": 64 * 1024,
+}
+
 # C8051F340 specific
 C8051F340_DEVID = const(0x0F)
 C8051F340_FPDAT = const(0xAD)
@@ -67,8 +84,8 @@ C8051F340_FLASH_SIZE = const(64 * 1024)
 
 # SI1000 specific
 SI1000_DEVID = const(0x16)
-SI1000_FPDAT = const(0x00)
-SI1000_PAGE_SIZE = const(512)
+SI1000_FPDAT = const(0xB4)
+SI1000_PAGE_SIZE = const(1024)
 SI1000_FLASH_SIZE = const(64 * 1024)
 
 
@@ -294,9 +311,10 @@ class C2Programmer:
     Uses GPIO 4 (C2CK) and GPIO 5 (C2D).
     """
 
-    def __init__(self):
+    def __init__(self, target=C8051F340):
         self.c2 = C2Interface()
-        self.fpdat_addr = C8051F340_FPDAT
+        self.target = target
+        self.fpdat_addr = target["fpdat"]
         self.initialized = False
 
     def _poll_outready(self, timeout_ms=100):
@@ -329,13 +347,15 @@ class C2Programmer:
 
         # Read Device ID - address register defaults to 0x00 after reset
         # Need to write address first, then read data
-        self.c2.address_write(0x00)
-        device_id = self.c2.data_read()
-        print(f"Device ID: 0x{device_id:02X}")
+        
+        expected_id = self.target["device_id"]
 
-        if device_id != C8051F340_DEVID:
-            print(f"Warning: Expected 0x{C8051F340_DEVID:02X}, got 0x{device_id:02X}")
-
+        if expected_id is not None and device_id != expected_id:
+            print(
+                f"Warning: Expected 0x{expected_id:02X}, "
+                f"got 0x{device_id:02X}"
+            )
+            
         if device_id == 0xFF:
             raise RuntimeError("No device detected (got 0xFF). Check wiring.")
 
