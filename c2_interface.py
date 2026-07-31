@@ -1,6 +1,6 @@
 """
 C2 Interface for RP2040 (MicroPython)
-Implements Silicon Labs C2 programming interface for C8051F340 and SI1000
+Implements Silicon Labs C2 programming interface for selected devices
 
 Based on AN127: Flash Programming via the C2 Interface
 
@@ -16,8 +16,11 @@ import time
 
 import rp2
 from machine import Pin, mem32
-
-
+from devices import (
+    C2_DEVICE_ID_ADDR,
+    C2_DERIVATIVE_ID_ADDR,
+    DEVICES_BY_ID,
+)
 # MicroPython doesn't have TimeoutError built-in
 class TimeoutError(Exception):
     pass
@@ -59,36 +62,23 @@ PI_ERR_INVALID_CMD = const(0x01)
 PI_ERR_CMD_FAILED = const(0x02)
 PI_ERR_FLASH_ERROR = const(0x03)  # Often indicates locked flash
 
-# Device Descriptors
-C8051F340 = {
-    "name": "C8051F340",
-    "device_id": 0x0F,
-    "fpdat": 0xAD,
-    "page_size": 512,
-    "flash_size": 64 * 1024,
-}
+def identify_target(c2):
+    c2.reset()
 
-SI1000 = {
-    "name": "Si1000",
-    "device_id": 0x16,       # fill from datasheet/ec2
-    "fpdat": 0xB4,
-    "page_size": 1024,       # fill next
-    "flash_size": 64 * 1024,
-}
+    c2.address_write(0x00)
+    device_id = c2.data_read()
 
-# C8051F340 specific
-C8051F340_DEVID = const(0x0F)
-C8051F340_FPDAT = const(0xAD)
-C8051F340_PAGE_SIZE = const(512)
-C8051F340_FLASH_SIZE = const(64 * 1024)
+    target = DEVICES_BY_ID.get(device_id)
 
-# SI1000 specific
-SI1000_DEVID = const(0x16)
-SI1000_FPDAT = const(0xB4)
-SI1000_PAGE_SIZE = const(1024)
-SI1000_FLASH_SIZE = const(64 * 1024)
+    if target is None:
+        raise RuntimeError(
+            f"Unsupported C2 Device ID 0x{device_id:02X}"
+        )
 
+    c2.address_write(target["derivative_id_addr"])
+    derivative_id = c2.data_read()
 
+    return target, derivative_id
 
 # =============================================================================
 # PIO programs for precise clock timing
