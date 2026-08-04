@@ -26,6 +26,7 @@ def main():
         return
 
     programmer.print_target_summary()
+    programmer.initialize()
 
 
 if __name__ == "__main__":

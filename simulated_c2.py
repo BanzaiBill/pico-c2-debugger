@@ -4,8 +4,9 @@
 class SimulatedC2:
     """Simulate the small portion of C2 needed for target identification."""
 
-    def __init__(self):
+    def __init__(self, pi_version=0x02):
         self._selected_address = 0x00
+        self._pi_version = pi_version
 
     def reset(self):
         """Simulate a C2 reset.
@@ -35,6 +36,10 @@ class SimulatedC2:
             "No simulated value is defined for C2 address "
             f"0x{self._selected_address:02X}"
         )
+
+    def activate_programming_interface(self):
+        print("[SIM] Programming Interface activated")
+        return self._pi_version
 
     @staticmethod
     def _prompt_for_byte(prompt):

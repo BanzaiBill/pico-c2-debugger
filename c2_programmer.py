@@ -19,6 +19,17 @@ class C2Programmer:
         self.device = None
         self.derivative_id = None
 
+    def initialize(self):
+
+        version = self.transport.activate_programming_interface()
+
+        print(
+            f"Programming Interface Version "
+            f"0x{version:02X}"
+        )
+
+        self.pi_version = version
+
     def identify_target(self):
         """Identify and validate the connected target.
 
