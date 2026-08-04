@@ -14,13 +14,17 @@ Uses PIO for precise clock timing (~2µs pulses).
 
 import time
 
-import rp2
-from machine import Pin, mem32
-from devices import (
-    C2_DEVICE_ID_ADDR,
-    C2_DERIVATIVE_ID_ADDR,
-    DEVICES_BY_ID,
-)
+try:
+    import rp2
+    from machine import Pin, mem32
+    from micropython import const
+    MICROPYTHON = True
+
+except ModuleNotFoundError:
+    MICROPYTHON = False
+
+from devices import DEVICES_BY_ID
+
 # MicroPython doesn't have TimeoutError built-in
 class TimeoutError(Exception):
     pass
@@ -31,263 +35,292 @@ class FlashLockedError(Exception):
 
     pass
 
+SIMULATE_TARGET = True
 READ_ONLY = True
 
-# RP2040 GPIO registers
-GPIO_OUT_SET = const(0xD0000014)
-GPIO_OUT_CLR = const(0xD0000018)
-GPIO_IN = const(0xD0000004)
-GPIO_OE_SET = const(0xD0000024)
-GPIO_OE_CLR = const(0xD0000028)
+if MICROPYTHON:
+    # RP2040 GPIO registers
+    GPIO_OUT_SET = const(0xD0000014)
+    GPIO_OUT_CLR = const(0xD0000018)
+    GPIO_IN = const(0xD0000004)
+    GPIO_OE_SET = const(0xD0000024)
+    GPIO_OE_CLR = const(0xD0000028)
 
-# Hardcoded pins: C2CK = GPIO 4, C2D = GPIO 5
-C2CK_MASK = const(1 << 4)
-C2D_MASK = const(1 << 5)
+    # Hardcoded pins: C2CK = GPIO 4, C2D = GPIO 5
+    C2CK_MASK = const(1 << 4)
+    C2D_MASK = const(1 << 5)
 
-# C2 Address Register Status Bits
-C2_INBUSY = const(0x02)
-C2_OUTREADY = const(0x01)
+    # C2 Address Register Status Bits
+    C2_INBUSY = const(0x02)
+    C2_OUTREADY = const(0x01)
 
-# Programming Interface Commands
-PI_CMD_GET_VERSION = const(0x01)
-PI_CMD_GET_DERIVATIVE = const(0x02)
-PI_CMD_DEVICE_ERASE = const(0x03)
-PI_CMD_BLOCK_READ = const(0x06)
-PI_CMD_BLOCK_WRITE = const(0x07)
-PI_CMD_PAGE_ERASE = const(0x08)
+    # Programming Interface Commands
+    PI_CMD_GET_VERSION = const(0x01)
+    PI_CMD_GET_DERIVATIVE = const(0x02)
+    PI_CMD_DEVICE_ERASE = const(0x03)
+    PI_CMD_BLOCK_READ = const(0x06)
+    PI_CMD_BLOCK_WRITE = const(0x07)
+    PI_CMD_PAGE_ERASE = const(0x08)
 
-# Programming Interface Response Codes
-PI_OK = const(0x0D)
-PI_ERR_INVALID_CMD = const(0x01)
-PI_ERR_CMD_FAILED = const(0x02)
-PI_ERR_FLASH_ERROR = const(0x03)  # Often indicates locked flash
+    # Programming Interface Response Codes
+    PI_OK = const(0x0D)
+    PI_ERR_INVALID_CMD = const(0x01)
+    PI_ERR_CMD_FAILED = const(0x02)
+    PI_ERR_FLASH_ERROR = const(0x03)  # Often indicates locked flash
 
-def identify_target(c2):
-    c2.reset()
+def read_simulated_device_id():
+    while True:
+        value = input(
+            "Enter simulated Device ID "
+            "(for example 0x0F or 0x16): "
+        ).strip()
 
-    c2.address_write(0x00)
-    device_id = c2.data_read()
+        try:
+            device_id = int(value, 0)
+        except ValueError:
+            print("Invalid number. Use decimal or hexadecimal notation.")
+            continue
 
-    target = DEVICES_BY_ID.get(device_id)
+        if not 0x00 <= device_id <= 0xFF:
+            print("Device ID must be an 8-bit value.")
+            continue
 
-    if target is None:
-        raise RuntimeError(
-            f"Unsupported C2 Device ID 0x{device_id:02X}"
-        )
+        return device_id
+    
+def identify_target(c2=None):
+    if SIMULATE_TARGET:
+        deviceId = read_simulated_device_id()
+    else:
+        if c2 is None:
+            raise RuntimeError("C2 interface was not supplied")
+        
+        c2.reset()
 
-    c2.address_write(target["derivative_id_addr"])
-    derivative_id = c2.data_read()
+        c2.address_write(0x00)
+        device_id = c2.data_read()
 
-    return target, derivative_id
+    deviceId = DEVICES_BY_ID.get(device_id)
+
+    if deviceId is None:
+        print(f"Unsupported C2 Device ID: 0x{device_id:02X}")
+        return None
+
+    print(
+        f"Detected {deviceId['name']} "
+        f"(Device ID 0x{device_id:02X})"
+    )
+
+    return deviceId
 
 # =============================================================================
 # PIO programs for precise clock timing
 # =============================================================================
 
+if MICROPYTHON == True:
+    # PIO program: single strobe, sample D after rising edge
+    @rp2.asm_pio(set_init=rp2.PIO.OUT_HIGH)
+    def _pio_strobe_read():
+        pull(block)  # Wait for trigger (value ignored)
+        set(pins, 0)[31]  # CK low, hold 32 cycles = 2us at 16MHz
+        set(pins, 1)[15]  # CK high, hold 16 cycles = 1us
+        in_(pins, 1)  # Sample D (bit 0 of in_base)
+        push(block)  # Push result to FIFO
+        nop()[15]  # Hold high a bit more
 
-# PIO program: single strobe, sample D after rising edge
-@rp2.asm_pio(set_init=rp2.PIO.OUT_HIGH)
-def _pio_strobe_read():
-    pull(block)  # Wait for trigger (value ignored)
-    set(pins, 0)[31]  # CK low, hold 32 cycles = 2us at 16MHz
-    set(pins, 1)[15]  # CK high, hold 16 cycles = 1us
-    in_(pins, 1)  # Sample D (bit 0 of in_base)
-    push(block)  # Push result to FIFO
-    nop()[15]  # Hold high a bit more
 
-
-# PIO program: single strobe for writing (no read)
-@rp2.asm_pio(set_init=rp2.PIO.OUT_HIGH)
-def _pio_strobe():
-    pull(block)  # Wait for trigger
-    set(pins, 0)[31]  # CK low, hold 32 cycles = 2us
-    set(pins, 1)[31]  # CK high, hold 32 cycles = 2us
+    # PIO program: single strobe for writing (no read)
+    @rp2.asm_pio(set_init=rp2.PIO.OUT_HIGH)
+    def _pio_strobe():
+        pull(block)  # Wait for trigger
+        set(pins, 0)[31]  # CK low, hold 32 cycles = 2us
+        set(pins, 1)[31]  # CK high, hold 32 cycles = 2us
 
 
 # =============================================================================
 # C2Interface - PIO-based low-level interface
 # =============================================================================
 
+if MICROPYTHON:
+    
+    class C2Interface:
+        """
+        Low-level C2 interface using PIO for precise clock timing.
+        Hardcoded to GPIO 4 (C2CK) and GPIO 5 (C2D).
+        """
 
-class C2Interface:
-    """
-    Low-level C2 interface using PIO for precise clock timing.
-    Hardcoded to GPIO 4 (C2CK) and GPIO 5 (C2D).
-    """
+        def __init__(self, sm_id=0):
+            self.ck = Pin(4, Pin.OUT, value=1)
+            self.d = Pin(5, Pin.IN)
 
-    def __init__(self, sm_id=0):
-        self.ck = Pin(4, Pin.OUT, value=1)
-        self.d = Pin(5, Pin.IN)
+            # State machine for strobe+read: 16MHz = 62.5ns/cycle
+            self.sm_read = rp2.StateMachine(
+                sm_id, _pio_strobe_read, freq=16_000_000, set_base=Pin(4), in_base=Pin(5)
+            )
 
-        # State machine for strobe+read: 16MHz = 62.5ns/cycle
-        self.sm_read = rp2.StateMachine(
-            sm_id, _pio_strobe_read, freq=16_000_000, set_base=Pin(4), in_base=Pin(5)
-        )
+            # State machine for strobe only
+            self.sm_strobe = rp2.StateMachine(
+                sm_id + 1, _pio_strobe, freq=16_000_000, set_base=Pin(4)
+            )
 
-        # State machine for strobe only
-        self.sm_strobe = rp2.StateMachine(
-            sm_id + 1, _pio_strobe, freq=16_000_000, set_base=Pin(4)
-        )
+            self.sm_read.active(1)
+            self.sm_strobe.active(1)
 
-        self.sm_read.active(1)
-        self.sm_strobe.active(1)
+        def _strobe(self):
+            """Generate one clock strobe using PIO."""
+            self.sm_strobe.put(0)
+            time.sleep_us(10)
 
-    def _strobe(self):
-        """Generate one clock strobe using PIO."""
-        self.sm_strobe.put(0)
-        time.sleep_us(10)
+        def _strobe_and_read(self):
+            """Single strobe, return D value sampled after rising edge."""
+            self.sm_read.put(0)
+            result = self.sm_read.get()
+            return result & 1
 
-    def _strobe_and_read(self):
-        """Single strobe, return D value sampled after rising edge."""
-        self.sm_read.put(0)
-        result = self.sm_read.get()
-        return result & 1
+        def _d_out(self, val):
+            """Set D as output with value."""
+            if val:
+                mem32[GPIO_OUT_SET] = C2D_MASK
+            else:
+                mem32[GPIO_OUT_CLR] = C2D_MASK
+            mem32[GPIO_OE_SET] = C2D_MASK
 
-    def _d_out(self, val):
-        """Set D as output with value."""
-        if val:
+        def _d_in(self):
+            """Set D as input (high-Z)."""
             mem32[GPIO_OUT_SET] = C2D_MASK
-        else:
-            mem32[GPIO_OUT_CLR] = C2D_MASK
-        mem32[GPIO_OE_SET] = C2D_MASK
+            mem32[GPIO_OE_CLR] = C2D_MASK
 
-    def _d_in(self):
-        """Set D as input (high-Z)."""
-        mem32[GPIO_OUT_SET] = C2D_MASK
-        mem32[GPIO_OE_CLR] = C2D_MASK
+        def reset(self):
+            """Reset target by holding CK low for >20us."""
+            # Completely deinit the state machines
+            self.sm_read.active(0)
+            self.sm_strobe.active(0)
 
-    def reset(self):
-        """Reset target by holding CK low for >20us."""
-        # Completely deinit the state machines
-        self.sm_read.active(0)
-        self.sm_strobe.active(0)
+            # Reconfigure pin as regular GPIO output
+            self.ck = Pin(4, Pin.OUT, value=1)
+            time.sleep_ms(10)
+            self.ck.value(0)
+            time.sleep_ms(100)
+            self.ck.value(1)
+            time.sleep_ms(100)
 
-        # Reconfigure pin as regular GPIO output
-        self.ck = Pin(4, Pin.OUT, value=1)
-        time.sleep_ms(10)
-        self.ck.value(0)
-        time.sleep_ms(100)
-        self.ck.value(1)
-        time.sleep_ms(100)
+            # Reinitialize PIO state machines
+            self.sm_read = rp2.StateMachine(
+                0, _pio_strobe_read, freq=16_000_000, set_base=Pin(4), in_base=Pin(5)
+            )
+            self.sm_strobe = rp2.StateMachine(
+                1, _pio_strobe, freq=16_000_000, set_base=Pin(4)
+            )
+            self.sm_read.active(1)
+            self.sm_strobe.active(1)
 
-        # Reinitialize PIO state machines
-        self.sm_read = rp2.StateMachine(
-            0, _pio_strobe_read, freq=16_000_000, set_base=Pin(4), in_base=Pin(5)
-        )
-        self.sm_strobe = rp2.StateMachine(
-            1, _pio_strobe, freq=16_000_000, set_base=Pin(4)
-        )
-        self.sm_read.active(1)
-        self.sm_strobe.active(1)
-
-    def address_write(self, addr):
-        """Write to C2 Address register."""
-        # START
-        self._d_in()
-        self._strobe()
-
-        # INS = 11 (Address Write) - LSB first
-        self._d_out(1)
-        self._strobe()
-        self._strobe()
-
-        # ADDRESS - 8 bits LSB first
-        for i in range(8):
-            self._d_out((addr >> i) & 1)
+        def address_write(self, addr):
+            """Write to C2 Address register."""
+            # START
+            self._d_in()
             self._strobe()
 
-        # STOP
-        self._d_in()
-        self._strobe()
-        time.sleep_ms(1)
-
-    def address_read(self):
-        """Read C2 Address register (status)."""
-        # START
-        self._d_in()
-        self._strobe()
-
-        # INS = 10 (Address Read) - LSB first
-        self._d_out(0)
-        self._strobe()
-        self._d_out(1)
-        self._strobe()
-
-        # ADDRESS - read 8 bits LSB first
-        self._d_in()
-        val = 0
-        for i in range(8):
-            if self._strobe_and_read():
-                val |= 1 << i
-
-        # STOP
-        self._strobe()
-        time.sleep_ms(1)
-        return val
-
-    def data_write(self, data):
-        """Write to C2 Data register."""
-        # START
-        self._d_in()
-        self._strobe()
-
-        # INS = 01 (Data Write) - LSB first
-        self._d_out(1)
-        self._strobe()
-        self._d_out(0)
-        self._strobe()
-
-        # LENGTH = 00 (1 byte)
-        self._d_out(0)
-        self._strobe()
-        self._strobe()
-
-        # DATA - 8 bits LSB first
-        for i in range(8):
-            self._d_out((data >> i) & 1)
+            # INS = 11 (Address Write) - LSB first
+            self._d_out(1)
+            self._strobe()
             self._strobe()
 
-        # WAIT - release D, poll until high
-        self._d_in()
-        for _ in range(10000):
-            if self._strobe_and_read():
-                break
+            # ADDRESS - 8 bits LSB first
+            for i in range(8):
+                self._d_out((addr >> i) & 1)
+                self._strobe()
 
-        # STOP
-        self._strobe()
-        time.sleep_ms(1)
+            # STOP
+            self._d_in()
+            self._strobe()
+            time.sleep_ms(1)
 
-    def data_read(self):
-        """Read from C2 Data register."""
-        # START
-        self._d_in()
-        self._strobe()
+        def address_read(self):
+            """Read C2 Address register (status)."""
+            # START
+            self._d_in()
+            self._strobe()
 
-        # INS = 00 (Data Read) - LSB first
-        self._d_out(0)
-        self._strobe()
-        self._strobe()
+            # INS = 10 (Address Read) - LSB first
+            self._d_out(0)
+            self._strobe()
+            self._d_out(1)
+            self._strobe()
 
-        # LENGTH = 00 (1 byte)
-        self._strobe()
-        self._strobe()
+            # ADDRESS - read 8 bits LSB first
+            self._d_in()
+            val = 0
+            for i in range(8):
+                if self._strobe_and_read():
+                    val |= 1 << i
 
-        # WAIT - release D, poll until high
-        self._d_in()
-        for _ in range(10000):
-            if self._strobe_and_read():
-                break
+            # STOP
+            self._strobe()
+            time.sleep_ms(1)
+            return val
 
-        # DATA - read 8 bits LSB first
-        val = 0
-        for i in range(8):
-            if self._strobe_and_read():
-                val |= 1 << i
+        def data_write(self, data):
+            """Write to C2 Data register."""
+            # START
+            self._d_in()
+            self._strobe()
 
-        # STOP
-        self._strobe()
-        time.sleep_ms(1)
-        return val
+            # INS = 01 (Data Write) - LSB first
+            self._d_out(1)
+            self._strobe()
+            self._d_out(0)
+            self._strobe()
+
+            # LENGTH = 00 (1 byte)
+            self._d_out(0)
+            self._strobe()
+            self._strobe()
+
+            # DATA - 8 bits LSB first
+            for i in range(8):
+                self._d_out((data >> i) & 1)
+                self._strobe()
+
+            # WAIT - release D, poll until high
+            self._d_in()
+            for _ in range(10000):
+                if self._strobe_and_read():
+                    break
+
+            # STOP
+            self._strobe()
+            time.sleep_ms(1)
+
+        def data_read(self):
+            """Read from C2 Data register."""
+            # START
+            self._d_in()
+            self._strobe()
+
+            # INS = 00 (Data Read) - LSB first
+            self._d_out(0)
+            self._strobe()
+            self._strobe()
+
+            # LENGTH = 00 (1 byte)
+            self._strobe()
+            self._strobe()
+
+            # WAIT - release D, poll until high
+            self._d_in()
+            for _ in range(10000):
+                if self._strobe_and_read():
+                    break
+
+            # DATA - read 8 bits LSB first
+            val = 0
+            for i in range(8):
+                if self._strobe_and_read():
+                    val |= 1 << i
+
+            # STOP
+            self._strobe()
+            time.sleep_ms(1)
+            return val
 
 
 # =============================================================================
@@ -297,16 +330,17 @@ class C2Interface:
 
 class C2Programmer:
     """
-    High-level programming interface for C8051F340.
+    High-level programming interface.
     Uses GPIO 4 (C2CK) and GPIO 5 (C2D).
     """
-
-    def __init__(self, target=C8051F340):
+    def __init__(self, device):
         self.c2 = C2Interface()
-        self.target = target
-        self.fpdat_addr = target["fpdat"]
+        self.device = device
+        self.fpdat_addr = device["fpdat_addr"]
+        self.page_size = device["page_size"]
+        self.flash_size = device["flash_size"]
         self.initialized = False
-
+        
     def _poll_outready(self, timeout_ms=100):
         """Poll until OutReady sets. Returns status byte."""
         deadline = time.ticks_add(time.ticks_ms(), timeout_ms)
@@ -1003,25 +1037,15 @@ def init_debug_only(retries=5):
     raise RuntimeError(f"Failed to connect after {retries} attempts")
 
 
-def quick_test():
-    """Quick test to verify C2 communication."""
-    prog = C2Programmer()
-    device_id, rev_id = prog.reset_and_init()
+def quick_test(device):
+    print(f"Selected target: {device['name']}")
+    print(f"Device ID: 0x{device['device_id']:02X}")
+    print(f"FPDAT: 0x{device['fpdat_addr']:02X}")
+    print(f"Page size: {device['page_size']} bytes")
 
-    if device_id == C8051F340_DEVID:
-        print("SUCCESS: C8051F340 detected!")
-    else if device_id == SI1000_DEVID:
-        print("SUCCESS: SI1000 detected!")
+    if SIMULATE_TARGET:
+        print("Simulation complete; hardware operations skipped.")
+        return
 
-    try:
-        info = prog.get_device_info()
-        print(f"FPI Version: 0x{info['version']:02X}")
-        print(f"Derivative: 0x{info['derivative']:02X}")
-    except Exception as e:
-        print(f"Could not get device info: {e}")
-
-    return device_id, rev_id
-
-
-if __name__ == "__main__":
-    quick_test()
+    programmer = C2Programmer(device)
+    programmer.initialize()
