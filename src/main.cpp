@@ -1,12 +1,15 @@
-#include "C2Programmer.h"
-#include "ConsoleC2Transport.h"
-
 #include <Arduino.h>
+
+#include "AdapterCommandServer.h"
+#include "DummyC2Transport.h"
 
 namespace
 {
-ConsoleC2Transport transport;
-C2Programmer programmer(transport);
+DummyC2Transport transport;
+
+AdapterCommandServer commandServer(
+    Serial,
+    transport);
 }
 
 void setup()
@@ -18,21 +21,10 @@ void setup()
         delay(10);
     }
 
-    Serial.println();
-    Serial.println("C2 Programmer");
-
-    if (!programmer.identifyTarget())
-    {
-        Serial.println(
-            "No further target operations are permitted."
-        );
-
-        return;
-    }
-
-    programmer.printTargetSummary();
+    commandServer.begin();
 }
 
 void loop()
 {
+    commandServer.service();
 }
