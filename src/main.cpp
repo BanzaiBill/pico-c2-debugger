@@ -16,10 +16,10 @@ void setup()
 {
     Serial.begin(115200);
 
-    while (!Serial)
-    {
-        delay(10);
-    }
+    delay(2000);
+
+    Serial.println();
+    Serial.println("RP2040 C2 Adapter starting...");
 
     commandServer.begin();
 }
