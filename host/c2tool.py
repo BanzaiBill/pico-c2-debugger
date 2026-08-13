@@ -1,23 +1,38 @@
 from serial_bridge import SerialBridge
+from c2_session import C2Session
+from device_database import DeviceDatabase
+from pathlib import Path
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATABASE_FILE = BASE_DIR / "data" / "devices" / "families.json"
 
 PORT = "COM6"
 
 
-def print_menu():
+def print_menu(session):
     print()
     print("C2 Toolkit")
     print("==========")
     print("1. Adapter information")
-    print("2. C2 reset")
-    print("3. Address write")
-    print("4. Address read")
-    print("5. Data write")
-    print("6. Data read")
-    print("7. Exit")
+    print("2. Identify target")
+
+    if session.recognized:
+        print("3. C2 reset")
+        print("4. Address write")
+        print("5. Address read")
+        print("6. Data write")
+        print("7. Data read")
+
     print("m. Show menu")
+    print("x. Exit")
     print()
 
+def require_recognized(session):
+    if not session.recognized:
+        print("A recognized target must be identified first.")
+        return False
+
+    return True
 
 def prompt_byte(prompt):
     while True:
@@ -44,10 +59,14 @@ def main():
         print(f"Unable to open adapter: {error}")
         return
 
+   
     try:
         print("Adapter connected.")
 
-        print_menu()
+        database = DeviceDatabase(DATABASE_FILE)
+        session = C2Session(bridge, database)
+ 
+        print_menu(session)
 
         while True:
             choice = input("c2> ").strip().lower()
@@ -57,39 +76,57 @@ def main():
                     print(bridge.get_info())
 
                 elif choice == "2":
-                    bridge.reset()
-                    print("C2 reset complete.")
+                    session.identify()
+
+                    print(f"Device ID:   0x{session.device_id:02X}")
+                    print(f"Revision ID: 0x{session.revision_id:02X}")
+
+                    if session.family is not None:
+                        print(f"Family:      {session.family['name']}")
+                    else:
+                        print("Family:      Unknown")
+
+                    print_menu(session)
 
                 elif choice == "3":
-                    address = prompt_byte("Address: ")
-                    bridge.address_write(address)
-                    print(f"Address register written: 0x{address:02X}")
+                    if require_recognized(session):
+                        bridge.reset()
+                        print("C2 reset complete.")
 
                 elif choice == "4":
-                    address = bridge.address_read()
-                    print(f"Address register: 0x{address:02X}")
+                    if require_recognized(session):
+                        address = prompt_byte("Address: ")
+                        bridge.address_write(address)
+                        print(f"Address register written: 0x{address:02X}")
 
                 elif choice == "5":
-                    value = prompt_byte("Data: ")
-                    bridge.data_write(value)
-                    print(f"Data written: 0x{value:02X}")
+                    if require_recognized(session):
+                        address = bridge.address_read()
+                        print(f"Address register: 0x{address:02X}")
 
                 elif choice == "6":
-                    value = bridge.data_read()
-                    print(f"Data read: 0x{value:02X}")
+                    if require_recognized(session):
+                        value = prompt_byte("Data: ")
+                        bridge.data_write(value)
+                        print(f"Data written: 0x{value:02X}")
 
                 elif choice == "7":
+                    if require_recognized(session):
+                        value = bridge.data_read()
+                        print(f"Data read: 0x{value:02X}")
+
+                elif choice == "x":
                     print("Exiting.")
                     break
 
                 elif choice == "m":
-                    print_menu()
+                    print_menu(session)
 
                 else:
                     print("Unknown selection. Enter 'm' to show the menu.")
 
-            except Exception as error:
-                print(f"Error: {error}")
+            except Exception:
+                raise
     finally:
         bridge.close()
 

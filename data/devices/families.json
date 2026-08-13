@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "families": [
+    {
+      "device_id": "0x0F",
+      "name": "C8051F34x family",
+      "programming_algorithm": "c2_pi_ad"
+    },
+    {
+      "device_id": "0x16",
+      "name": "Si1000 family",
+      "programming_algorithm": "c2_pi_b4"
+    }
+  ]
+}

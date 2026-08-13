@@ -4,6 +4,12 @@ void DummyC2Transport::reset()
 {
     selectedAddress_ = 0x00;
     lastDataWritten_ = 0x00;
+
+    simulatedTarget_++;
+    if (simulatedTarget_ >= 3)
+    {
+        simulatedTarget_ = 0;
+    }
 }
 
 void DummyC2Transport::addressWrite(
@@ -25,19 +31,25 @@ void DummyC2Transport::dataWrite(
 
 std::uint8_t DummyC2Transport::dataRead()
 {
-    switch (selectedAddress_)
+    if (selectedAddress_ == 0x00)
     {
-        case 0x00:
-            // Simulated Device ID:
-            // Si1000 / C8051F92x-F93x family
-            return 0x16;
+        switch (simulatedTarget_)
+        {
+            case 0:
+                return 0x16; // Si1000 family
 
-        case 0x01:
-            // Simulated derivative ID:
-            // Si1000
-            return 0xD0;
+            case 1:
+                return 0x0F; // C8051F34x family
 
-        default:
-            return lastDataWritten_;
+            default:
+                return 0xFE; // unknown device
+        }
     }
+
+    if (selectedAddress_ == 0x01)
+    {
+        return 0x01; // simulated revision ID
+    }
+
+    return lastDataWritten_;
 }

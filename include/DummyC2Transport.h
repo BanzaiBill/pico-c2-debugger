@@ -18,4 +18,5 @@ public:
 private:
     std::uint8_t selectedAddress_ = 0x00;
     std::uint8_t lastDataWritten_ = 0x00;
+    std::uint8_t simulatedTarget_ = 2;
 };
