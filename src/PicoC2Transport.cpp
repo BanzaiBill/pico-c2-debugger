@@ -225,3 +225,51 @@ std::uint8_t PicoC2Transport::strobeAndRead()
     return static_cast<std::uint8_t>(
         result & 0x01);
 }
+
+void PicoC2Transport::reset()
+{
+    // Neither PIO state machine may drive C2CK while SIO generates reset.
+    pio_sm_set_enabled(pio_, smStrobe_, false);
+    pio_sm_set_enabled(pio_, smRead_, false);
+
+    // Temporarily give C2CK back to normal GPIO control.
+    gpio_set_function(c2ckPin_, GPIO_FUNC_SIO);
+    gpio_set_dir(c2ckPin_, GPIO_OUT);
+
+    // Match the deliberately generous reset timing used by the
+    // original MicroPython implementation.
+    gpio_put(c2ckPin_, 1);
+    delay(10);
+
+    gpio_put(c2ckPin_, 0);
+    delay(100);
+
+    gpio_put(c2ckPin_, 1);
+    delay(100);
+
+    // Return C2CK to PIO control.
+    gpio_set_function(c2ckPin_, GPIO_FUNC_PIO0);
+
+    pio_sm_set_enabled(pio_, smStrobe_, true);
+    pio_sm_set_enabled(pio_, smRead_, true);
+}
+
+void PicoC2Transport::addressWrite(std::uint8_t address)
+{
+    (void)address;
+}
+
+std::uint8_t PicoC2Transport::addressRead()
+{
+    return 0;
+}
+
+void PicoC2Transport::dataWrite(std::uint8_t value)
+{
+    (void)value;
+}
+
+std::uint8_t PicoC2Transport::dataRead()
+{
+    return 0;
+}

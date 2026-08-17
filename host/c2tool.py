@@ -15,9 +15,9 @@ def print_menu(session):
     print("==========")
     print("1. Adapter information")
     print("2. Identify target")
+    print("3. C2 reset")
 
     if session.recognized:
-        print("3. C2 reset")
         print("4. Address write")
         print("5. Address read")
         print("6. Data write")
@@ -89,9 +89,8 @@ def main():
                     print_menu(session)
 
                 elif choice == "3":
-                    if require_recognized(session):
-                        bridge.reset()
-                        print("C2 reset complete.")
+                    bridge.reset()
+                    print("C2 reset complete.")
 
                 elif choice == "4":
                     if require_recognized(session):
