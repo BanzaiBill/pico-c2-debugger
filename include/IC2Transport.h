@@ -6,6 +6,7 @@ class IC2Transport
 {
 public:
     virtual ~IC2Transport() = default;
+    virtual const char* name() const = 0;
 
     virtual void reset() = 0;
 

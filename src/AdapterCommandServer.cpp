@@ -12,9 +12,15 @@ AdapterCommandServer::AdapterCommandServer(
 {
 }
 
+void AdapterCommandServer::sendInfo()
+{
+    stream_.print("INFO C2ADAPTER 0.1 ");
+    stream_.println(transport_.name());
+}
+
 void AdapterCommandServer::begin()
 {
-    stream_.println("INFO C2ADAPTER 0.1 DUMMY");
+    sendInfo();
 }
 
 void AdapterCommandServer::service()
@@ -111,8 +117,7 @@ void AdapterCommandServer::processCommand(
 
 void AdapterCommandServer::handleGetInfo()
 {
-    stream_.println(
-        "INFO C2ADAPTER 0.1 DUMMY");
+    sendInfo();
 }
 
 void AdapterCommandServer::handleReset()

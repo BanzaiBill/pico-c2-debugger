@@ -15,6 +15,11 @@ public:
     void dataWrite(std::uint8_t value) override;
     std::uint8_t dataRead() override;
 
+    const char* name() const override
+    {
+        return "DUMMY";
+    }
+
 private:
     std::uint8_t selectedAddress_ = 0x00;
     std::uint8_t lastDataWritten_ = 0x00;

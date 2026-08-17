@@ -14,8 +14,15 @@ public:
     void reset() override;
     void addressWrite(std::uint8_t address) override;
     std::uint8_t addressRead() override;
+
     void dataWrite(std::uint8_t value) override;
+
     std::uint8_t dataRead() override;
+
+    const char* name() const override
+    {
+        return "PICO";
+    }
 
 private:
     void initializePio();

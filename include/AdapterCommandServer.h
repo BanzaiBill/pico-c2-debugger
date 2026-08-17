@@ -24,7 +24,7 @@ private:
     std::size_t commandLength_ = 0;
 
     void processCommand(char* commandLine);
-
+    void sendInfo();
     void handleGetInfo();
     void handleReset();
 

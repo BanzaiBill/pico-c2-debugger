@@ -1,4 +1,5 @@
 from serial_bridge import SerialBridge
+from serial.tools import list_ports
 from c2_session import C2Session
 from device_database import DeviceDatabase
 from pathlib import Path
@@ -6,8 +7,59 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATABASE_FILE = BASE_DIR / "data" / "devices" / "families.json"
 
-PORT = "COM6"
+def select_adapter():
+    while True:
+        ports = list(list_ports.comports())
 
+        if not ports:
+            print("No serial ports found.")
+            return None
+
+        print()
+        print("Available serial ports")
+        print("======================")
+
+        for index, port in enumerate(ports, start=1):
+            print(
+                f"{index}. {port.device:<6} "
+                f"{port.description} "
+                f"[{port.hwid}]"
+            )
+
+        print()
+        selection = input("Select port (x to exit): ").strip().lower()
+
+        if selection == "x":
+            return None
+
+        try:
+            index = int(selection) - 1
+        except ValueError:
+            print("Please enter a port number.")
+            continue
+
+        if not 0 <= index < len(ports):
+            print("Invalid selection.")
+            continue
+
+        port_name = ports[index].device
+
+        try:
+            bridge = SerialBridge(port_name)
+            info = bridge.get_info()
+
+            if not info.startswith("INFO C2ADAPTER "):
+                print(
+                    f"{port_name} did not identify as a C2 adapter."
+                )
+                bridge.close()
+                continue
+
+            print(f"Connected to {port_name}: {info}")
+            return bridge
+
+        except Exception as error:
+            print(f"Unable to use {port_name}: {error}")
 
 def print_menu(session):
     print()
@@ -51,10 +103,10 @@ def prompt_byte(prompt):
 
 
 def main():
-    print(f"Opening adapter on {PORT}...")
-
     try:
-        bridge = SerialBridge(PORT)
+        bridge = select_adapter()
+        if bridge is None:
+            return
     except Exception as error:
         print(f"Unable to open adapter: {error}")
         return
