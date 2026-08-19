@@ -68,13 +68,10 @@ def print_menu(session):
     print("1. Adapter information")
     print("2. Identify target")
     print("3. C2 reset")
-
-    if session.recognized:
-        print("4. Address write")
-        print("5. Address read")
-        print("6. Data write")
-        print("7. Data read")
-
+    print("4. Address write")
+    print("5. Address read")
+    print("6. Data write")
+    print("7. Data read")
     print("m. Show menu")
     print("x. Exit")
     print()
@@ -145,26 +142,22 @@ def main():
                     print("C2 reset complete.")
 
                 elif choice == "4":
-                    if require_recognized(session):
-                        address = prompt_byte("Address: ")
-                        bridge.address_write(address)
-                        print(f"Address register written: 0x{address:02X}")
+                    address = prompt_byte("Address: ")
+                    bridge.address_write(address)
+                    print(f"Address register written: 0x{address:02X}")
 
                 elif choice == "5":
-                    if require_recognized(session):
-                        address = bridge.address_read()
-                        print(f"Address register: 0x{address:02X}")
+                    address = bridge.address_read()
+                    print(f"Address register: 0x{address:02X}")
 
                 elif choice == "6":
-                    if require_recognized(session):
-                        value = prompt_byte("Data: ")
-                        bridge.data_write(value)
-                        print(f"Data written: 0x{value:02X}")
+                    value = prompt_byte("Data: ")
+                    bridge.data_write(value)
+                    print(f"Data written: 0x{value:02X}")
 
                 elif choice == "7":
-                    if require_recognized(session):
-                        value = bridge.data_read()
-                        print(f"Data read: 0x{value:02X}")
+                    value = bridge.data_read()
+                    print(f"Data read: 0x{value:02X}")
 
                 elif choice == "x":
                     print("Exiting.")

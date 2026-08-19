@@ -15,6 +15,8 @@ public:
     void service();
 
 private:
+    static constexpr const char* FIRMWARE_VERSION = "0.2";
+
     static constexpr std::size_t COMMAND_BUFFER_SIZE = 96;
 
     Stream& stream_;

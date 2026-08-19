@@ -256,7 +256,36 @@ void PicoC2Transport::reset()
 
 void PicoC2Transport::addressWrite(std::uint8_t address)
 {
-    (void)address;
+    // Release C2D before beginning the transaction.
+    gpio_set_dir(c2dPin_, GPIO_IN);
+
+    // START
+    strobe();
+
+    // INS = 0b11, transmitted LSB first.
+    gpio_put(c2dPin_, 1);
+    gpio_set_dir(c2dPin_, GPIO_OUT);
+
+    strobe();
+    strobe();
+
+    // Address byte, LSB first.
+    for (std::uint8_t bit = 0; bit < 8; ++bit)
+    {
+        gpio_put(
+            c2dPin_,
+            (address >> bit) & 0x01);
+
+        strobe();
+    }
+
+    // Release C2D before STOP.
+    gpio_set_dir(c2dPin_, GPIO_IN);
+
+    // STOP
+    strobe();
+
+    delayMicroseconds(1000);
 }
 
 std::uint8_t PicoC2Transport::addressRead()

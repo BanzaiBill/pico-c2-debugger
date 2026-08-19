@@ -14,7 +14,9 @@ AdapterCommandServer::AdapterCommandServer(
 
 void AdapterCommandServer::sendInfo()
 {
-    stream_.print("INFO C2ADAPTER 0.1 ");
+    stream_.print("INFO C2ADAPTER ");
+    stream_.print(FIRMWARE_VERSION);
+    stream_.print(" ");
     stream_.println(transport_.name());
 }
 
